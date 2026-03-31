@@ -1,0 +1,92 @@
+##
+## Copyright (c) 2019 Matthias Tafelmeier.
+##
+## This file is part of godon
+##
+## godon is free software: you can redistribute it and/or modify
+## it under the terms of the GNU Affero General Public License as
+## published by the Free Software Foundation, either version 3 of the
+## License, or (at your option) any later version.
+##
+## godon is distributed in the hope that it will be useful,
+## but WITHOUT ANY WARRANTY; without even the implied warranty of
+## MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+## GNU Affero General Public License for more details.
+##
+## You should have received a copy of the GNU Affero General Public License
+## along with this godon. If not, see <http://www.gnu.org/licenses/>.
+##
+
+on:
+  workflow_dispatch:
+    inputs:
+      action:
+        description: 'Test infra lifecycle action'
+        required: true
+        default: 'recreate'
+        type: choice
+        options:
+          - recreate
+          - cleanup
+
+jobs:
+  recreate:
+    if: inputs.action == 'recreate'
+    runs-on: [self-hosted, linux]
+    env:
+      MASK_FILE: testing/maskfile.md
+    steps:
+      - uses: actions/checkout@v4
+      - name: cleanup former infra
+        run: |
+             source /etc/bashrc
+             mask --maskfile "${MASK_FILE}" infra cleanup network || true
+             mask --maskfile "${MASK_FILE}" infra cleanup machines || true
+      - name: create machines
+        run: |
+             source /etc/bashrc
+             mask --maskfile "${MASK_FILE}" infra create machines
+      - name: wait for vm readiness
+        run: |
+             source /etc/bashrc
+             __kcli_cmd="mask --maskfile ${MASK_FILE} util kcli run"
+             for i in $(seq 1 30); do
+               count=$(${__kcli_cmd} "list vm" | grep 'micro_stack' | grep -c 'running' || true)
+               if [ "$count" -ge 2 ]; then
+                 echo "VMs ready"
+                 exit 0
+               fi
+               echo "Waiting for VMs... attempt $i/30"
+               sleep 5
+             done
+             echo "ERROR: VMs not ready after 150s" >&2
+             exit 1
+      - name: create network
+        run: |
+             source /etc/bashrc
+             mask --maskfile "${MASK_FILE}" infra create network
+      - name: deploy observability
+        run: |
+             source /etc/bashrc
+             mask --maskfile "${MASK_FILE}" config generate observability
+             mask --maskfile "${MASK_FILE}" observability deploy
+
+  cleanup:
+    if: inputs.action == 'cleanup'
+    runs-on: [self-hosted, linux]
+    env:
+      MASK_FILE: testing/maskfile.md
+    steps:
+      - uses: actions/checkout@v4
+      - name: teardown observability
+        run: |
+             source /etc/bashrc
+             mask --maskfile "${MASK_FILE}" observability cleanup || true
+      - name: teardown network
+        run: |
+             source /etc/bashrc
+             mask --maskfile "${MASK_FILE}" infra cleanup network || true
+      - name: teardown machines
+        run: |
+             source /etc/bashrc
+             mask --maskfile "${MASK_FILE}" infra cleanup machines || true
