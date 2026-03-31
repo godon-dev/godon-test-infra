@@ -24,40 +24,45 @@ along with this godon. If not, see <http://www.gnu.org/licenses/>.
 
 ### config generate
 
-#### config generate prometheus
+#### config generate observability
 
-> config generator for prometheus monitored targets
+> generate helm value overrides for godon-observability chart with dynamic test VM scrape targets
 
 ~~~bash
 set -eEux
 
 __kcli_cmd="mask --maskfile ${MASKFILE_DIR}/maskfile.md util kcli run"
 
- ## generate prometheus target config
 __target_ip_addresses_array=($(${__kcli_cmd} "list vm" | grep 'micro_stack' | awk -F\| '{ print $4 }' | xargs))
 
-cat << EOF > targets.json
+if [ ${#__target_ip_addresses_array[@]} -lt 2 ]; then
+    echo "error: expected at least 2 VMs, found ${#__target_ip_addresses_array[@]}" >&2
+    exit 1
+fi
 
-[
-	{
-		"targets": [
-			"${__target_ip_addresses_array[0]}:8090"
-		],
-		"labels": {
-			"job": "socket_statistics"
-		}
-	},
-	{
-		"targets": [
-			"${__target_ip_addresses_array[1]}:8090"
-		],
-		"labels": {
-			"job": "socket_statistics"
-		}
-	}
-]
-
+cat << EOF > "${MASKFILE_DIR}/observability-override.yaml"
+prometheus:
+  enabled: true
+  server:
+    hostNetwork: true
+  extraScrapeConfigs: |
+    - job_name: 'socket_statistics'
+      scrape_interval: 500ms
+      scrape_timeout: 400ms
+      static_configs:
+        - targets:
+          - '${__target_ip_addresses_array[0]}:8090'
+          - '${__target_ip_addresses_array[1]}:8090'
+          labels:
+            vm_role: 'source'
+    - job_name: 'godon-metrics-exporter'
+      scrape_interval: 5s
+      static_configs:
+        - targets:
+          - 'godon-metrics-exporter.godon.svc.cluster.local:9099'
 EOF
+
+echo "generated ${MASKFILE_DIR}/observability-override.yaml"
 
 ~~~
 
@@ -83,6 +88,50 @@ do
   export target_object="{ "user": "godon_robot", "key_file": "/opt/airflow/credentials/id_rsa", "address": "${__target_ip_address}" }"
   yq -i '.breeder.effectuation.targets += env(target_object)' "${output_file}"
 done
+
+~~~
+
+
+
+## observability
+
+> observability stack deployment via godon-observability helm chart
+
+### observability deploy
+
+> deploy or upgrade godon-observability helm release with test VM scrape targets
+
+~~~bash
+set -eEux
+
+__release_name="godon-observability"
+__namespace="godon-observability"
+__chart="godon-observability"
+__override_file="${MASKFILE_DIR}/observability-override.yaml"
+
+if [ ! -f "${__override_file}" ]; then
+    echo "error: ${__override_file} not found - run 'config generate observability' first" >&2
+    exit 1
+fi
+
+helm upgrade --install "${__release_name}" "${__chart}" \
+    --namespace "${__namespace}" \
+    --create-namespace \
+    -f "${__override_file}"
+
+~~~
+
+### observability cleanup
+
+> remove godon-observability helm release
+
+~~~bash
+set -eEux
+
+__release_name="godon-observability"
+__namespace="godon-observability"
+
+helm uninstall "${__release_name}" --namespace "${__namespace}" || true
 
 ~~~
 
@@ -210,32 +259,6 @@ __plan_name=micro_stack
 __kcli_cmd="mask --maskfile ${MASKFILE_DIR}/maskfile.md util kcli run"
 
 echo "provisioning infra instances"
-
-~~~
-
-## godon
-
-> Mngnt logic for the godon stack 
-
-### godon create
-
-> Create godon services
-
-~~~bash
-set -eEux
-
-docker-compose -f "${MASKFILE_DIR}/../docker-compose.yml" up --build -d --force-recreate
-
-~~~
-
-### godon cleanup
-
-> Cleanup godon services
-
-~~~bash
-set -eEux
-
-docker-compose -f "${MASKFILE_DIR}/../docker-compose.yml" down --remove-orphans  --volumes
 
 ~~~
 
