@@ -16,7 +16,7 @@ GNU Affero General Public License for more details.
 You should have received a copy of the GNU Affero General Public License
 along with this godon. If not, see <http://www.gnu.org/licenses/>.
 -->
-# Godon Test Session Coordinator
+# Godon Test Infra Coordinator
 
 ## config
 
@@ -55,43 +55,11 @@ prometheus:
           - '${__target_ip_addresses_array[1]}:8090'
           labels:
             vm_role: 'source'
-    - job_name: 'godon-metrics-exporter'
-      scrape_interval: 5s
-      static_configs:
-        - targets:
-          - 'godon-metrics-exporter.godon.svc.cluster.local:9099'
 EOF
 
 echo "generated ${MASKFILE_DIR}/observability-override.yaml"
 
 ~~~
-
-#### config generate breeder (output_file)
-
-> config generator for breeder test run
-
-~~~bash
-set -eEux
-
-__template_file="${MASKFILE_DIR}/../examples/network.yml"
-__kcli_cmd="mask --maskfile ${MASKFILE_DIR}/maskfile.md util kcli run"
-
- ## generate breeder test run config from running instances
-__target_ip_addresses_array=($(${__kcli_cmd} "list vm" | grep 'micro_stack' | awk -F\| '{ print $4 }' | xargs))
-
-
-  ## empty existing targets
-cat "${__template_file}" | yq '.breeder.effectuation.targets |= []' - > ${output_file}
-
-for __target_ip_address in ${__target_ip_addresses_array[@]}
-do
-  export target_object="{ "user": "godon_robot", "key_file": "/opt/airflow/credentials/id_rsa", "address": "${__target_ip_address}" }"
-  yq -i '.breeder.effectuation.targets += env(target_object)' "${output_file}"
-done
-
-~~~
-
-
 
 ## observability
 
@@ -243,48 +211,6 @@ do
 done
 
 ip link del veth_port_0 || exit 0
-
-~~~
-
-### infra provision
-
-#### infra provision machines
-
-> Provision Test Infra Machine Instances
-
-~~~bash
-set -eEux
-
-__plan_name=micro_stack
-__kcli_cmd="mask --maskfile ${MASKFILE_DIR}/maskfile.md util kcli run"
-
-echo "provisioning infra instances"
-
-~~~
-
-## testing
-
-### testing perform
-
-> Orchestrate and Perform Session of Test Run
-
-~~~bash
-set -eEux
-
-echo "performing tests"
-__kcli_cmd="mask --maskfile ${MASKFILE_DIR}/maskfile.md util kcli run"
-__ssh_cmd="ssh -o UserKnownHostsFile=/dev/null -o GlobalKnownHostsFile=/dev/null -o StrictHostKeyChecking=no -i ${MASKFILE_DIR}/infra/credentials/ssh/id_rsa_robot"
-
-__source_vm_ip_address=($(${__kcli_cmd} "list vm" | grep 'micro_stack' | grep 'source' | awk -F\| '{ print $4 }' | xargs))
-__sink_vm_ip_address=($(${__kcli_cmd} "list vm" | grep 'micro_stack' | grep 'sink' | awk -F\| '{ print $4 }' | xargs))
-
-__sink_vm_test_iface_ip_address=($(${__ssh_cmd} "godon_robot@${__sink_vm_ip_address}" "ip --json a show dev ens8  | jq '.[0].addr_info[0].local'"))
-
-${__ssh_cmd} "godon_robot@${__sink_vm_ip_address}" "sudo systemctl stop test-server; sudo systemctl start test-server"
-
-${__ssh_cmd} "godon_robot@${__source_vm_ip_address}" "echo "SINK_IP=${__sink_vm_test_iface_ip_address}" > /home/test/sink_ip"
-${__ssh_cmd} "godon_robot@${__source_vm_ip_address}" "sudo systemctl stop test-client; sudo systemctl start test-client"
-
 
 ~~~
 
