@@ -229,7 +229,7 @@ ip link del veth_port_0 || exit 0
 ~~~bash
 set -eEux
 
-container_name="quay.io/karmab/kcli:22.07"
+container_name="quay.io/karmab/kcli:26.03"
 pool_dir="/github-runner/artifacts/"
 
 docker run --net host --rm \
