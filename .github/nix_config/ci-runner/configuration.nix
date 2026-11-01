@@ -24,13 +24,24 @@
 
   boot = {
     loader = { grub.enable = true; };
-    kernelPackages = pkgs.linuxPackages_6_12;
+    ## CVE-2026-98432 (IPv4 TCP, remote, unauthenticated; RHSB-2026-016):
+    ## fixed upstream in linux 6.12.113. Assert the floor so a stale or
+    ## frozen channel (nixos-24.05 sits at 6.12.7, the old 26.05 snapshot
+    ## at 6.12.111) fails the build loudly instead of rebooting into a
+    ## vulnerable kernel.
+    kernelPackages =
+      assert (lib.versionAtLeast pkgs.linuxPackages_6_12.kernel.version "6.12.113");
+      pkgs.linuxPackages_6_12;
   };
 
   services = {
     openssh.enable = true;
     github-runners.gh-runner = {
       enable = true;
+      ## stable registration name: the module default (gh-runner). The
+      ## orphaned entries (gh-runner, gh-runner2) were removed from the
+      ## org UI on 2026-11-01 — same-name re-registration works again,
+      ## no more name walking.
       url = "https://github.com/godon-dev";
       tokenFile = "/srv/gh_runner.token";
       extraLabels = [ "nixos" "osuosl" ];
@@ -57,7 +68,9 @@
   in with pkgs; [
     (python3.withPackages pythonModules)
     ansible
-    bashInteractive_5
+    ## bashInteractive_5 was dropped as an attr name in the nixos-26.05
+    ## snapshot; bashInteractive is the same interactive bash 5.x line.
+    bashInteractive
     cargo
     clang
     ctags
@@ -143,6 +156,4 @@
   };
 
   nixpkgs.config.allowUnfree = true;
-
-  system.nixos.version = "24.05";
 }
