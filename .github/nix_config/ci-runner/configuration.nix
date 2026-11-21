@@ -120,7 +120,6 @@
     home = "/home/github-runner-nixos/";
     extraGroups = [ "wheel" "docker" "libvirtd" "systemd-network" ];
     openssh.authorizedKeys.keys = [
-      "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIL8M0dSABT396Fj3V0xplrvg/LnIf5mP1xmDPpetSTCo godon@osuosl-runner"
     ];
   };
 
