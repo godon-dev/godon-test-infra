@@ -45,7 +45,7 @@
       url = "https://github.com/godon-dev";
       tokenFile = "/srv/gh_runner.token";
       extraLabels = [ "nixos" "osuosl" ];
-      extraPackages = with pkgs; [ nixos-generators mask kind kubernetes-helm docker docker-compose iproute2 jq yq-go ];
+      extraPackages = with pkgs; [ nixos-generators mask kind kubernetes-helm docker docker-compose iproute2 jq yq-go kubectl python3 curl ];
       workDir = "/github-runner/";
       serviceOverrides = {
         PrivateUsers = false;
@@ -88,6 +88,7 @@
     yq-go
     killall
     kind
+    kubectl
     kubernetes-helm
     mask
     nmap
